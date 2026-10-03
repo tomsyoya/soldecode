@@ -1,0 +1,150 @@
+<!doctype html>
+<html>
+<head><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:; base-uri 'none'; form-action 'none'">
+<meta charset="utf-8">
+<title>SolDecode</title>
+<style>
+* { box-sizing: border-box; margin:0; padding:0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
+body { width:1280px; height:720px; background:#0f1419; color:#e6edf3; overflow:hidden; }
+.header { padding:16px 28px; border-bottom:1px solid #253040; }
+.header h1 { font-size:22px; color:#7ce0c3; display:inline-block; }
+.header .tag { font-size:13px; color:#8b98a5; margin-top:4px; }
+.main { display:flex; gap:20px; padding:20px 28px; height:470px; }
+.panel { background:#161b22; border:1px solid #253040; border-radius:10px; padding:16px; }
+.left { width:420px; }
+.right { flex:1; display:flex; flex-direction:column; }
+.left h3, .right h3 { font-size:14px; color:#9fb3c8; margin-bottom:10px; }
+.input-box { background:#0d1117; border:1px solid #2d3b4e; border-radius:6px; padding:10px; font-size:13px; color:#7ce0c3; font-family:monospace; margin-bottom:14px; word-break:break-all; }
+.tx-btns { display:flex; gap:8px; margin-bottom:16px; }
+.tx-btn { flex:1; padding:8px 6px; background:#1a212b; border:1px solid #2d3b4e; border-radius:6px; color:#c9d6e3; font-size:12px; cursor:pointer; text-align:center; }
+.tx-btn.active { background:#1d4036; border-color:#2fa384; color:#7ce0c3; }
+.decode-btn { width:100%; padding:12px; background:#2fa384; border:none; border-radius:6px; color:#06120d; font-weight:600; font-size:14px; cursor:pointer; }
+.tabs { display:flex; gap:6px; margin-bottom:10px; }
+.tab { padding:6px 14px; background:#1a212b; border:1px solid #2d3b4e; border-radius:6px; font-size:12px; cursor:pointer; color:#8b98a5; }
+.tab.active { background:#1d4036; color:#7ce0c3; border-color:#2fa384; }
+.output-area { flex:1; background:#0d1117; border:1px solid #2d3b4e; border-radius:6px; padding:14px; font-family:monospace; font-size:12.5px; color:#c9d6e3; overflow:hidden; white-space:pre-wrap; }
+.sentence { margin-bottom:10px; padding:10px; background:#12241d; border-left:3px solid #2fa384; color:#9ff0d4; font-size:13px; border-radius:4px; font-family: inherit; }
+.placeholder { color:#5b6b7a; font-style:italic; }
+.registry { padding:14px 28px; }
+.registry-row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.chip { padding:6px 12px; background:#1a212b; border:1px solid #2d3b4e; border-radius:16px; font-size:12px; color:#c9d6e3; }
+.chip.new { background:#1d4036; border-color:#2fa384; color:#7ce0c3; }
+.add-btn { padding:6px 14px; background:#253040; border:1px solid #3a4b5e; border-radius:16px; font-size:12px; color:#c9d6e3; cursor:pointer; }
+.footer { position:absolute; bottom:8px; left:28px; font-size:11px; color:#5b6b7a; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>SolDecode</h1>
+  <div class="tag">Open-source Go SDK — turn raw Solana instructions into semantic actions</div>
+</div>
+
+<div class="main">
+  <div class="panel left">
+    <h3>Transaction Input</h3>
+    <div class="input-box" id="input-box" data-demo="input-box">5kJ8cR...a1Z9</div>
+    <div class="tx-btns">
+      <div class="tx-btn active" data-demo="tx-swap" onclick="selectTx('swap')">Swap</div>
+      <div class="tx-btn" data-demo="tx-stake" onclick="selectTx('stake')">Stake</div>
+      <div class="tx-btn" data-demo="tx-transfer" onclick="selectTx('transfer')">Transfer</div>
+    </div>
+    <button class="decode-btn" data-demo="decode-btn" onclick="decode()">Decode Transaction</button>
+  </div>
+
+  <div class="panel right">
+    <h3>Structured Output</h3>
+    <div class="tabs">
+      <div class="tab active" data-demo="tab-json" onclick="switchTab('json')">JSON (REST API)</div>
+      <div class="tab" data-demo="tab-cli" onclick="switchTab('cli')">CLI</div>
+    </div>
+    <div class="sentence" id="sentence" data-demo="sentence">Select a transaction and click Decode to see the semantic action.</div>
+    <div class="output-area placeholder" id="output" data-demo="output">No output yet...</div>
+  </div>
+</div>
+
+<div class="registry panel" style="margin:0 28px;">
+  <h3>Decoder Registry (pluggable)</h3>
+  <div class="registry-row" id="registry" data-demo="registry">
+    <div class="chip">System</div>
+    <div class="chip">Token</div>
+    <div class="chip">Jupiter</div>
+    <div class="chip">Orca</div>
+    <div class="chip">Marinade</div>
+    <div class="add-btn" data-demo="add-plugin-btn" onclick="addPlugin()">+ Add Decoder</div>
+  </div>
+</div>
+
+<div class="footer">Prototype — all data is simulated</div>
+
+<script>
+var data = {
+  swap: {
+    sig: "5kJ8cRnXmTq8b2pVoWf4Ua1Z9mK3dLs7...",
+    sentence: "Swapped 2.0 SOL for 150.32 USDC via Jupiter",
+    json: '{\\n  "action": "swap",\\n  "input": "2.0 SOL",\\n  "output": "150.32 USDC",\\n  "program": "Jupiter Aggregator",\\n  "wallet": "7xKs...9fQ2"\\n}',
+    cli: '$ soldecode tx 5kJ8...a1Z9\\n> Program: Jupiter Aggregator\\n> Action: SWAP\\n> 2.0 SOL -> 150.32 USDC\\n> Wallet: 7xKs...9fQ2'
+  },
+  stake: {
+    sig: "9mPzqD4cXbE3t7Rk1Gv8Nc3X7Ljf2Uw...",
+    sentence: "Staked 10.0 SOL into Marinade liquid staking",
+    json: '{\\n  "action": "stake",\\n  "amount": "10.0 SOL",\\n  "program": "Marinade Finance",\\n  "wallet": "3bQw...8kLp"\\n}',
+    cli: '$ soldecode tx 9mPz...c3X7\\n> Program: Marinade Finance\\n> Action: STAKE\\n> 10.0 SOL -> mSOL\\n> Wallet: 3bQw...8kLp'
+  },
+  transfer: {
+    sig: "2fTbV6rWp9QeY1Lm4Zk8Xo3Ae8Y1Jdq...",
+    sentence: "Transferred 500.0 USDC between wallets",
+    json: '{\\n  "action": "transfer",\\n  "amount": "500.0 USDC",\\n  "program": "SPL Token",\\n  "from": "4nRt...2wQd",\\n  "to": "8vLk...5jXe"\\n}',
+    cli: '$ soldecode tx 2fTb...e8Y1\\n> Program: SPL Token\\n> Action: TRANSFER\\n> 500.0 USDC\\n> From: 4nRt...2wQd -> To: 8vLk...5jXe'
+  }
+};
+var current = 'swap';
+var currentTab = 'json';
+var decoded = {};
+
+function selectTx(type){
+  current = type;
+  document.getElementById('input-box').innerText = data[type].sig;
+  var btns = document.querySelectorAll('.tx-btn');
+  btns.forEach(function(b){ b.classList.remove('active'); });
+  document.querySelector('[data-demo="tx-' + type + '"]').classList.add('active');
+  document.getElementById('sentence').innerText = "Select a transaction and click Decode to see the semantic action.";
+  var out = document.getElementById('output');
+  out.classList.add('placeholder');
+  out.innerText = "No output yet...";
+  delete decoded[type + '_shown'];
+}
+
+function decode(){
+  var d = data[current];
+  document.getElementById('sentence').innerText = d.sentence;
+  decoded.json = d.json;
+  decoded.cli = d.cli;
+  renderOutput();
+}
+
+function renderOutput(){
+  var out = document.getElementById('output');
+  if(!decoded.json){ return; }
+  out.classList.remove('placeholder');
+  out.innerText = currentTab === 'json' ? decoded.json : decoded.cli;
+}
+
+function switchTab(t){
+  currentTab = t;
+  document.querySelectorAll('.tab').forEach(function(x){ x.classList.remove('active'); });
+  document.querySelector('[data-demo="tab-' + t + '"]').classList.add('active');
+  renderOutput();
+}
+
+function addPlugin(){
+  var reg = document.getElementById('registry');
+  var addBtn = document.querySelector('[data-demo="add-plugin-btn"]');
+  var chip = document.createElement('div');
+  chip.className = 'chip new';
+  chip.innerText = 'Raydium';
+  reg.insertBefore(chip, addBtn);
+}
+</script>
+</body>
+</html>
