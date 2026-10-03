@@ -1,0 +1,2 @@
+# soldecode
+Go製のオープンソースSDKでSolanaの生命令を意味のあるアクションに変換
